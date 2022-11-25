@@ -6,7 +6,7 @@ Returns:
 import json
 import sys
 from typing import AnyStr, Dict
-
+import os
 import numpy as np
 import torch
 from torch import nn
@@ -372,7 +372,7 @@ class Trainer(Train):
                         metadata  = np.arange(self.decoding_model.embed.weight.shape[0]),
                         tag = f'decoding embeding')
         
-        os.mkdir(f"debugging/{self.name}")
+        create_dir(f"debugging/{self.name}")
         for epoch in self.epoch_loop:
             model_path = f"./model_files/{self.name}/{epoch}/"
             os.mkdir(model_path)
@@ -391,9 +391,16 @@ class Trainer(Train):
             torch.save(self.encoding_model.state_dict(), encoder_path)
             torch.save(self.decoding_model.state_dict(), decoder_path)
             
-
-if __name__ == "__main__":
-    import os
+# %%
+def create_dir(path):
+        try:
+            os.makedirs(path)
+        except FileExistsError:
+            logger.debug("the directory already exists")
+        
+    
+def make_training_ready(model_name):
+    
     training_generator, test_data_generator, validate_data_generator = get_data_generators()
     source_vocab_size = len(TextData.source_vocab)
     encoding_model = Encoder(source_vocab_size, HIDDEN_SIZE)
@@ -401,19 +408,19 @@ if __name__ == "__main__":
     destination_vocab_target_size = len(TextData.destination_vocab)
     decoding_model = Decoder(destination_vocab_size, HIDDEN_SIZE, destination_vocab_target_size)
     
-    model_name = 'translator_ec_dc_Adam2_telugu_clean'
-    
+    # Creating Necessary directories
+    create_dir(f"model_files/{model_name}")
+
     vocab_path = f"model_files/{model_name}/vocab.json"
-    if model_name not in  os.listdir("model_files"):
-        os.mkdir(f"model_files/{model_name}")
-        
+    
     with open(vocab_path, "w", encoding='utf-8') as vocab_file:
-        vocab_file.write(
-            json.dumps({
-                "source": TextData.source_vocab,
-                "destination": TextData.destination_vocab
-            }, ensure_ascii=False)
-        )
+                vocab_file.write(
+                    json.dumps({
+                        "source": TextData.source_vocab,
+                        "destination": TextData.destination_vocab
+                    }, ensure_ascii=False)
+                )
+    
     encoder_optimizer = torch.optim.Adam(encoding_model.parameters(), lr=0.01)
     decoder_optimizer = torch.optim.Adam(decoding_model.parameters(), lr=0.01)
 
@@ -422,7 +429,7 @@ if __name__ == "__main__":
     decoder_optimizer
     ]
     loss_fun = nn.NLLLoss()
-    trainer = Trainer(
+    trainer_obj = Trainer(
         loss_fun,
         optimizers,
         tensorboard=True,
@@ -435,17 +442,66 @@ if __name__ == "__main__":
         encoder=encoding_model,
         decoder=decoding_model
         )
-
-    trainer.train(EPOCHS)
     
-    configs = Configs(path="configs.yml")
-    configs.configs.update({
-        "data":{
-            "source_vocab_size": source_vocab_size,
-            "destination_vocab_size": destination_vocab_size,
-            "destination_vocab_target_size": destination_vocab_target_size,
-            "vocab_path": vocab_path
-        }
-    })
-    configs.dump()
+    return trainer_obj
+
+if __name__ == "__main__":
+    # import os
+    # training_generator, test_data_generator, validate_data_generator = get_data_generators()
+    # source_vocab_size = len(TextData.source_vocab)
+    # encoding_model = Encoder(source_vocab_size, HIDDEN_SIZE)
+    # destination_vocab_size = len(TextData.destination_vocab)
+    # destination_vocab_target_size = len(TextData.destination_vocab)
+    # decoding_model = Decoder(destination_vocab_size, HIDDEN_SIZE, destination_vocab_target_size)
+    
+    # model_name = 'translator_ec_dc_Adam2_telugu_clean'
+    
+    # vocab_path = f"model_files/{model_name}/vocab.json"
+    # if model_name not in  os.listdir("model_files"):
+    #     os.mkdir(f"model_files/{model_name}")
+        
+    # with open(vocab_path, "w", encoding='utf-8') as vocab_file:
+    #     vocab_file.write(
+    #         json.dumps({
+    #             "source": TextData.source_vocab,
+    #             "destination": TextData.destination_vocab
+    #         }, ensure_ascii=False)
+    #     )
+    # encoder_optimizer = torch.optim.Adam(encoding_model.parameters(), lr=0.01)
+    # decoder_optimizer = torch.optim.Adam(decoding_model.parameters(), lr=0.01)
+
+    # optimizers = [
+    # encoder_optimizer,
+    # decoder_optimizer
+    # ]
+    # loss_fun = nn.NLLLoss()
+    # trainer = Trainer(
+    #     loss_fun,
+    #     optimizers,
+    #     tensorboard=True,
+    #     log_dir=TENSORBOARD_LOG_DIR,
+    #     model_name=model_name,
+    #     log_level=5,
+    #     train_data=training_generator,
+    #     validation_data=validate_data_generator,
+    #     test_data=test_data_generator,
+    #     encoder=encoding_model,
+    #     decoder=decoding_model
+    #     )
+
+    # trainer.train(EPOCHS)
+    
+    # configs = Configs(path="configs.yml")
+    # configs.configs.update({
+    #     "data":{
+    #         "source_vocab_size": source_vocab_size,
+    #         "destination_vocab_size": destination_vocab_size,
+    #         "destination_vocab_target_size": destination_vocab_target_size,
+    #         "vocab_path": vocab_path
+    #     }
+    # })
+    # configs.dump()
+    
+    trainer = make_training_ready("base_model")
+    trainer.train(1)
     

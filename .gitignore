@@ -2,7 +2,8 @@
 /.vscode
 /Data
 /cc.te.300.bin.gz.part
-/logs
+Code/logs
+Code/debugging
 /test.py
 **/__pycache__
 Code/logs
