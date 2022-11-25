@@ -1,14 +1,23 @@
 import random
 import re
 from collections import Counter
-from torch.nn.utils.rnn import pad_sequence
+
 import numpy as np
-from constants import (DATA_PATH, DESTINATION_LANG, SOURCE_LANG, TEST_RATIO, 
-                       VALIDATION_RATIO, BATCH_SIZE)
-from loguru import logger
-from torch.utils.data import  Dataset, DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
 import torch
+from constants import (BATCH_SIZE, DATA_PATH, DESTINATION_LANG, EOS_TOKEN,
+                       EOS_TOKEN_INDEX, SOS_TOKEN, SOS_TOKEN_INDEX,
+                       SOURCE_LANG, TEST_RATIO, UKN_TOKEN, UKN_TOKEN_INDEX,
+                       VALIDATION_RATIO, PAD_TOKEN, PAD_TOKEN_INDEX)
+from loguru import logger
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.sampler import SubsetRandomSampler
+from data_clean import clean_special_chars
+
+# Data Ref :- 
+# 1. https://tatoeba.org/en/downloads
+# 2. https://drive.google.com/file/d/1xrD9bL78mbxpp-DdOw1EHhz1nzin_6dX/view
+
 
 class LoadAndData:
     """
@@ -17,16 +26,16 @@ class LoadAndData:
     MAX_SENT_LEN = 0
     def __init__(self) -> None:
         
-        self.source_path = f"{DATA_PATH}data.{SOURCE_LANG}"
-        self.destination_path = f"{DATA_PATH}data.{DESTINATION_LANG}"
+        self.source_path = f"{DATA_PATH}sample.{SOURCE_LANG}"
+        self.destination_path = f"{DATA_PATH}sample.{DESTINATION_LANG}"
 
-        self.destination = open(self.destination_path, encoding="utf-8").readlines()[:10000]
-        self.source = open(self.source_path, encoding="utf-8").readlines()[:10000]
+        self.destination = open(self.destination_path, encoding="utf-8").readlines()[:10000] * 333
+        self.source = open(self.source_path, encoding="utf-8").readlines()[:10000] * 333
 
-
-    def clean_sent(self, text):
+    @staticmethod
+    def clean_sent(text):
         text = text.lower()
-        text = text.replace('"', ' ').replace('”', '').replace("  ా ", " ").replace(" ఞ ", " ").replace("  ౖ ", " ").replace(" ၔ ", " ").replace("  ి ", " ").replace("  ొ ", " ").replace("  ే ", " ").replace("  ో ", " ").replace("  ై ", " ").replace("ϐ", "").replace("0", "").replace("🌅", "").replace("ଅ", "").replace("📱", "").replace("Δ", "").replace("λ", "").replace("△", "").replace("\u2061", "").replace("Ο", "").replace("\uf601", "").replace("–", "").replace("も", "").replace("ɪ", "").replace("≡", "").replace("ə", "").replace("☘", "").replace("Å", "").replace("Ϙ", "").replace("🔔", "").replace("¾", "").replace("✭", "").replace("ʃ", "").replace("Θ", "").replace("\\xa0", "").replace("👌", "").replace("⊖", "").replace("Ø", "").replace("”", "").replace("Ê", "").replace("µ", "").replace("τ", "").replace("✱", "").replace("つ", "").replace("Æ", "").replace("❁", "").replace("▾", "").replace("◀", "").replace("జ", "").replace("—", "").replace("ల", "").replace("ఽ", "").replace("é", "").replace("˚", "").replace("Φ", "").replace("Ϝ", "").replace("ó", "").replace("\uf0b7", "").replace("·", "").replace("∘", "").replace("ℎ", "").replace("⁂", "").replace("Σ", "").replace("‡", "").replace("\n", " ").replace("\u200c", "").replace("రూపాయలు", " రూపాయలు").replace("  ", " ").replace(" ట ", " ").replace(" ప ", " ").replace(" డ ", " ").replace(" మ ", " ").replace(" ా ", " ").replace(" ర ", " ").replace(" ఊ ", " ").replace(" జ ", " ").replace(" ో ", " ").replace(" హ ", " ").replace(" య ", " ").replace(" స ", " ").replace(" ఉ ", " ").replace(" చ ", " ").replace(" ం ", " ").replace(" ణ ", " ").replace(" ఒ ", " ").replace(" ఈ ", " ").replace(" ఏ ", " ").replace(" ఆ ", " ").replace(" వ ", " ").replace(" ఓ ", " ").replace(" ఎ ", " ").replace(" ల ", " ").replace(" న ", " ").replace(" అ ", " ").replace(" ఐ ", " ").replace(" ూ ", " ").replace(" త ", " ").replace(" ఇ ", " ").replace(" క ", " ").replace(" శ ", " ").replace(" ద ", " ").replace(" బ ", " ").replace(" ఘ ", " ").replace(" ఁ ", " ").replace(" ృ ", " ").replace(" ధ ", " ").replace(" ే ", " ").replace(" భ ", " ").replace(" ళ ", " ").replace(" థ ", " ").replace(" ౄ ", " ").replace(" ఔ ", " ").replace(" ః ", " ").replace(" ఫ ", " ").replace(" ె ", " ").replace(" ై ", " ").replace(" ి ", " ").replace(" ఖ ", " ").replace(" ్ ", " ").replace(" ీ ", " ").replace(" ష ", " ").replace(" ు ", " ").replace(" ొ ", " ").replace(" क ", " ").replace(" ౯ ", " ").replace(" ఠ ", " ").replace(" ఱ ", " ").replace(" ఝ ", " ").replace(" ౦ ", " ").replace(" ఋ ", " ").replace(" ౌ ", " ").replace(" ఌ ", " ").replace(" గ ", " ").replace(" ఛ ", " ").replace(" ఢ ", " ").replace(" ౨ ", " ").replace("✦", "").replace("’", "").replace("»", "").replace("►", "").replace("“", "").replace("‘", "").replace("₹", " రూపాయలు ").replace("▪", "").replace("⇒", "").replace("✺", "").replace("⍟", "").replace("♦", "").replace("¶", "").replace("°", "").replace("👇", "").replace("…", "").replace("阎", "").replace("ü", "").replace("½", "").replace("◆", "").replace("ƛ", "").replace("౩", "").replace("□", "").replace("±", "").replace("✔", "").replace("№", "").replace("★", "").replace("©", "").replace("❑", "").replace("≈", "").replace("•", "").replace("∠", "").replace("∫", "").replace("−", "").replace("౭", "").replace("§", "").replace("ê", "").replace("⇔", "").replace("×", "").replace("÷", "").replace("μ", "").replace("✪", "").replace("€", "").replace("→", "").replace("♪", "").replace("❏", "").replace("ε", "").replace("❂", "").replace("✘", "").replace("➦", "").replace("∇", "").replace("⇨", "").replace("≤", "").replace("α", "").replace("⛳", "").replace("✍", "").replace("∑", "").replace("॥", "").replace("£", "").replace("❤", "").replace("․", "").replace("β", "").replace("γ", "").replace("🏏", "").replace("∼", "").replace("ω", "").replace("¤", "").replace("‑", "").replace("😉", "").replace("∧", "").replace("➥", "").replace("⦿", "").replace("θ", "").replace("➤", "").replace("ø", "").replace("౬", "").replace("🙏", "").replace("।", "").replace("❝", "").replace("■", "").replace("æ", "").replace("י", "").replace("ρ", "").replace("σ", "").replace("و", "").replace("😶", "").replace("™", "").replace("✓", "").replace("✧", "").replace("à", "").replace("🦊", "").replace("≥", "").replace("π", "").replace("↗", "").replace("ā", "").replace("ϕ", "").replace("←", "").replace("❖", "").replace("●", "").replace("✸", "").replace("å", "").replace("౧", "").replace("¼", "").replace("❉", "").replace("✖", "").replace("²", "").replace("›", "").replace("¬", "").replace("薩", "").replace("旦", "").replace("ο", "").replace("➢", "").replace("∆", "").replace("○", "").replace("φ", "").replace("«", "").replace("♥", "").replace("✶", "").replace("👉", "").replace("✹", "").replace("✫", "").replace("ℓ", "").replace("⦾", "").replace("ン", "").replace("🔥", "").replace("☀", "").replace("∗", "").replace("δ", "").replace("✯", "").replace("ה", "").replace("☺", "").replace("⁄", "").replace("↓", "").replace("≠", "").replace("¹", "").replace("✩", "").replace("⦁", "").replace("⤏", "").replace("‰", "").replace("⚝", "").replace("🌾", "").replace("‣", "").replace("♣", "").replace("¸", "").replace("ː", "").replace("🔎", "").replace("¿", "").replace("😬", "").replace("◘", "").replace("✼", "").replace("∙", "").replace("⇩", "").replace("³", "").replace("🙂", "").replace("☆", "").replace("¡", "").replace("⚹", "").replace("❋", "").replace("®", "").replace("∞", "").replace("😟", "").replace("✴", "").replace("∪", "").replace("∩", "").replace("❃", "").replace("▶", "").replace("ä", "").replace("ö", "").replace("ß", "").replace("⊗", "").replace("ఙ", "").replace("¥", "").replace("▸", "").replace("в", "").replace("ц", "").replace("౫", "").replace("↑", "").replace("′", "").replace("\u200b", "").replace("\ufeff", "").replace("\uf0d8", "").replace("\uf642", "").replace("\u200d", "").replace("\uf0fc", "").replace("\uf02a", "").replace("\u2060", "").replace("\u200e", "").replace("\uf609", "").replace("\uf449", "").replace("\uf33a", "").replace("\uf60a", "").replace("1", "one ").replace("2", "two ").replace("3", " three ").replace("4", " four ").replace("5", " five ").replace("6", " six ").replace("7", " seven ").replace("8", " eight ").replace("9", " nine ").replace("`", " ").replace("\\", " __no_space__ __back_slask__ __no_space__").replace("-", "  __no_space__ __minus__ __no_space__ ").replace(" a ", " ").replace(" i ", " ").replace(" k ", " ").replace(" x ", " ").replace(" s ", " ").replace(" v ", " ").replace(" o ", " ").replace(" y ", " ").replace(" r ", " ").replace(" u ", " ").replace(" c ", " ").replace(" n ", " ").replace(" m ", " ").replace(" e ", " ").replace(" 0 ", " ").replace(" b ", " ").replace(" g ", " ").replace(" t ", " ").replace(" d ", " ").replace(" j ", " ").replace(" h ", " ").replace(" p ", " ").replace(" l ", " ").replace(" w ", " ").replace(" f ", " ").replace(" q ", " ").replace(" z ", " ").replace("'", '')
+        text = text.replace('"', ' ').replace('”', '').replace("  ా ", " ").replace(" ఞ ", " ").replace("  ౖ ", " ").replace(" ၔ ", " ").replace("  ి ", " ").replace("  ొ ", " ").replace("  ే ", " ").replace("  ో ", " ").replace("  ై ", " ").replace("ϐ", "").replace("0", "").replace("🌅", "").replace("ଅ", "").replace("📱", "").replace("Δ", "").replace("λ", "").replace("△", "").replace("\u2061", "").replace("Ο", "").replace("\uf601", "").replace("–", "").replace("も", "").replace("ɪ", "").replace("≡", "").replace("ə", "").replace("☘", "").replace("Å", "").replace("Ϙ", "").replace("🔔", "").replace("¾", "").replace("✭", "").replace("ʃ", "").replace("Θ", "").replace("\\xa0", "").replace("👌", "").replace("⊖", "").replace("Ø", "").replace("”", "").replace("Ê", "").replace("µ", "").replace("τ", "").replace("✱", "").replace("つ", "").replace("Æ", "").replace("❁", "").replace("▾", "").replace("◀", "").replace("జ", "").replace("—", "").replace("ల", "").replace("ఽ", "").replace("é", "").replace("˚", "").replace("Φ", "").replace("Ϝ", "").replace("ó", "").replace("\uf0b7", "").replace("·", "").replace("∘", "").replace("ℎ", "").replace("⁂", "").replace("Σ", "").replace("‡", "").replace("\n", " ").replace("\u200c", "").replace("రూపాయలు", " రూపాయలు").replace("  ", " ").replace(" ట ", " ").replace(" ప ", " ").replace(" డ ", " ").replace(" మ ", " ").replace(" ా ", " ").replace(" ర ", " ").replace(" ఊ ", " ").replace(" జ ", " ").replace(" ో ", " ").replace(" హ ", " ").replace(" య ", " ").replace(" స ", " ").replace(" ఉ ", " ").replace(" చ ", " ").replace(" ం ", " ").replace(" ణ ", " ").replace(" ఒ ", " ").replace(" ఈ ", " ").replace(" ఏ ", " ").replace(" ఆ ", " ").replace(" వ ", " ").replace(" ఓ ", " ").replace(" ఎ ", " ").replace(" ల ", " ").replace(" న ", " ").replace(" అ ", " ").replace(" ఐ ", " ").replace(" ూ ", " ").replace(" త ", " ").replace(" ఇ ", " ").replace(" క ", " ").replace(" శ ", " ").replace(" ద ", " ").replace(" బ ", " ").replace(" ఘ ", " ").replace(" ఁ ", " ").replace(" ృ ", " ").replace(" ధ ", " ").replace(" ే ", " ").replace(" భ ", " ").replace(" ళ ", " ").replace(" థ ", " ").replace(" ౄ ", " ").replace(" ఔ ", " ").replace(" ః ", " ").replace(" ఫ ", " ").replace(" ె ", " ").replace(" ై ", " ").replace(" ి ", " ").replace(" ఖ ", " ").replace(" ్ ", " ").replace(" ీ ", " ").replace(" ష ", " ").replace(" ు ", " ").replace(" ొ ", " ").replace(" क ", " ").replace(" ౯ ", " ").replace(" ఠ ", " ").replace(" ఱ ", " ").replace(" ఝ ", " ").replace(" ౦ ", " ").replace(" ఋ ", " ").replace(" ౌ ", " ").replace(" ఌ ", " ").replace(" గ ", " ").replace(" ఛ ", " ").replace(" ఢ ", " ").replace(" ౨ ", " ").replace("✦", "").replace("’", "").replace("»", "").replace("►", "").replace("“", "").replace("‘", "").replace("₹", " రూపాయలు ").replace("▪", "").replace("⇒", "").replace("✺", "").replace("⍟", "").replace("♦", "").replace("¶", "").replace("°", "").replace("👇", "").replace("…", "").replace("阎", "").replace("ü", "").replace("½", "").replace("◆", "").replace("ƛ", "").replace("౩", "").replace("□", "").replace("±", "").replace("✔", "").replace("№", "").replace("★", "").replace("©", "").replace("❑", "").replace("≈", "").replace("•", "").replace("∠", "").replace("∫", "").replace("−", "").replace("౭", "").replace("§", "").replace("ê", "").replace("⇔", "").replace("×", "").replace("÷", "").replace("μ", "").replace("✪", "").replace("€", "").replace("→", "").replace("♪", "").replace("❏", "").replace("ε", "").replace("❂", "").replace("✘", "").replace("➦", "").replace("∇", "").replace("⇨", "").replace("≤", "").replace("α", "").replace("⛳", "").replace("✍", "").replace("∑", "").replace("॥", "").replace("£", "").replace("❤", "").replace("․", "").replace("β", "").replace("γ", "").replace("🏏", "").replace("∼", "").replace("ω", "").replace("¤", "").replace("‑", "").replace("😉", "").replace("∧", "").replace("➥", "").replace("⦿", "").replace("θ", "").replace("➤", "").replace("ø", "").replace("౬", "").replace("🙏", "").replace("।", "").replace("❝", "").replace("■", "").replace("æ", "").replace("י", "").replace("ρ", "").replace("σ", "").replace("و", "").replace("😶", "").replace("™", "").replace("✓", "").replace("✧", "").replace("à", "").replace("🦊", "").replace("≥", "").replace("π", "").replace("↗", "").replace("ā", "").replace("ϕ", "").replace("←", "").replace("❖", "").replace("●", "").replace("✸", "").replace("å", "").replace("౧", "").replace("¼", "").replace("❉", "").replace("✖", "").replace("²", "").replace("›", "").replace("¬", "").replace("薩", "").replace("旦", "").replace("ο", "").replace("➢", "").replace("∆", "").replace("○", "").replace("φ", "").replace("«", "").replace("♥", "").replace("✶", "").replace("👉", "").replace("✹", "").replace("✫", "").replace("ℓ", "").replace("⦾", "").replace("ン", "").replace("🔥", "").replace("☀", "").replace("∗", "").replace("δ", "").replace("✯", "").replace("ה", "").replace("☺", "").replace("⁄", "").replace("↓", "").replace("≠", "").replace("¹", "").replace("✩", "").replace("⦁", "").replace("⤏", "").replace("‰", "").replace("⚝", "").replace("🌾", "").replace("‣", "").replace("♣", "").replace("¸", "").replace("ː", "").replace("🔎", "").replace("¿", "").replace("😬", "").replace("◘", "").replace("✼", "").replace("∙", "").replace("⇩", "").replace("³", "").replace("🙂", "").replace("☆", "").replace("¡", "").replace("⚹", "").replace("❋", "").replace("®", "").replace("∞", "").replace("😟", "").replace("✴", "").replace("∪", "").replace("∩", "").replace("❃", "").replace("▶", "").replace("ä", "").replace("ö", "").replace("ß", "").replace("⊗", "").replace("ఙ", "").replace("¥", "").replace("▸", "").replace("в", "").replace("ц", "").replace("౫", "").replace("↑", "").replace("′", "").replace("\u200b", "").replace("\ufeff", "").replace("\uf0d8", "").replace("\uf642", "").replace("\u200d", "").replace("\uf0fc", "").replace("\uf02a", "").replace("\u2060", "").replace("\u200e", "").replace("\uf609", "").replace("\uf449", "").replace("\uf33a", "").replace("\uf60a", "").replace("1", "one ").replace("2", "two ").replace("3", " three ").replace("4", " four ").replace("5", " five ").replace("6", " six ").replace("7", " seven ").replace("8", " eight ").replace("9", " nine ").replace("`", " ").replace(" a ", " ").replace(" i ", " ").replace(" k ", " ").replace(" x ", " ").replace(" s ", " ").replace(" v ", " ").replace(" o ", " ").replace(" y ", " ").replace(" r ", " ").replace(" u ", " ").replace(" c ", " ").replace(" n ", " ").replace(" m ", " ").replace(" e ", " ").replace(" 0 ", " ").replace(" b ", " ").replace(" g ", " ").replace(" t ", " ").replace(" d ", " ").replace(" j ", " ").replace(" h ", " ").replace(" p ", " ").replace(" l ", " ").replace(" w ", " ").replace(" f ", " ").replace(" q ", " ").replace(" z ", " ").replace("'", '')
         # file.write(text + "\n")  
 
         text = text.replace('"', ' ')
@@ -97,83 +106,14 @@ class LoadAndData:
         text = text.replace("‡", "")
         text = text.replace("\n", " ")
         text = text.replace("\u200c", "")
-        text = text.replace("రూపాయలు", " రూపాయలు")
         text = text.replace("  ", " ")
-        text = text.replace(" ట ", " ")
-        text = text.replace(" ప ", " ")
-        text = text.replace(" డ ", " ")
-        text = text.replace(" మ ", " ")
-        text = text.replace(" ా ", " ")
-        text = text.replace(" ర ", " ")
-        text = text.replace(" ఊ ", " ")
-        text = text.replace(" జ ", " ")
-        text = text.replace(" ో ", " ")
-        text = text.replace(" హ ", " ")
-        text = text.replace(" య ", " ")
-        text = text.replace(" స ", " ")
-        text = text.replace(" ఉ ", " ")
-        text = text.replace(" చ ", " ")
-        text = text.replace(" ం ", " ")
-        text = text.replace(" ణ ", " ")
-        text = text.replace(" ఒ ", " ")
-        text = text.replace(" ఈ ", " ")
-        text = text.replace(" ఏ ", " ")
-        text = text.replace(" ఆ ", " ")
-        text = text.replace(" వ ", " ")
-        text = text.replace(" ఓ ", " ")
-        text = text.replace(" ఎ ", " ")
-        text = text.replace(" ల ", " ")
-        text = text.replace(" న ", " ")
-        text = text.replace(" అ ", " ")
-        text = text.replace(" ఐ ", " ")
-        text = text.replace(" ూ ", " ")
-        text = text.replace(" త ", " ")
-        text = text.replace(" ఇ ", " ")
-        text = text.replace(" క ", " ")
-        text = text.replace(" శ ", " ")
-        text = text.replace(" ద ", " ")
-        text = text.replace(" బ ", " ")
-        text = text.replace(" ఘ ", " ")
-        text = text.replace(" ఁ ", " ")
-        text = text.replace(" ృ ", " ")
-        text = text.replace(" ధ ", " ")
-        text = text.replace(" ే ", " ")
-        text = text.replace(" భ ", " ")
-        text = text.replace(" ళ ", " ")
-        text = text.replace(" థ ", " ")
-        text = text.replace(" ౄ ", " ")
-        text = text.replace(" ఔ ", " ")
-        text = text.replace(" ః ", " ")
-        text = text.replace(" ఫ ", " ")
-        text = text.replace(" ె ", " ")
-        text = text.replace(" ై ", " ")
-        text = text.replace(" ి ", " ")
-        text = text.replace(" ఖ ", " ")
-        text = text.replace(" ్ ", " ")
-        text = text.replace(" ీ ", " ")
-        text = text.replace(" ష ", " ")
-        text = text.replace(" ు ", " ")
-        text = text.replace(" ొ ", " ")
-        text = text.replace(" क ", " ")
-        text = text.replace(" ౯ ", " ")
-        text = text.replace(" ఠ ", " ")
-        text = text.replace(" ఱ ", " ")
-        text = text.replace(" ఝ ", " ")
-        text = text.replace(" ౦ ", " ")
-        text = text.replace(" ఋ ", " ")
-        text = text.replace(" ౌ ", " ")
-        text = text.replace(" ఌ ", " ")
-        text = text.replace(" గ ", " ")
-        text = text.replace(" ఛ ", " ")
-        text = text.replace(" ఢ ", " ")
-        text = text.replace(" ౨ ", " ")
+
         text = text.replace("✦", "")
         text = text.replace("’", "")
         text = text.replace("»", "")
         text = text.replace("►", "")
         text = text.replace("“", "")
         text = text.replace("‘", "")
-        text = text.replace("₹", " రూపాయలు ")
         text = text.replace("▪", "")
         text = text.replace("⇒", "")
         text = text.replace("✺", "")
@@ -377,7 +317,7 @@ class LoadAndData:
         text = text.replace("౭", " ఏడు ")
         text = text.replace("౮", " ఎనిమిది ")
         text = text.replace("౯", " తొమ్మిది ")
-        
+
         text = text.replace(" a ", " ")
         text = text.replace(" i ", " ")
         text = text.replace(" k ", " ")
@@ -405,42 +345,26 @@ class LoadAndData:
         text = text.replace(" f ", " ")
         text = text.replace(" q ", " ")
         text = text.replace(" z ", " ")
-        text = text.replace("౮" ,"")
+        text = text.replace("౮", "")
         
-        text = text.replace("ו" ,"")
-        text = text.replace("ם" ,"")
-        text = text.replace("º" ,"")
-        text = text.replace("پ" ,"")
-        text = text.replace("😐" ,"")
-        text = text.replace("ਏ" ,"")
-        text = text.replace("ι" ,"")
-        text = text.replace("ç" ,"")
-        text = text.replace("ί" ,"")
-        text = text.replace("क" ,"")
-        text = text.replace("♠" ,"")
-        text = text.replace("瞿" ,"")
-        text = text.replace("桜" ,"")
-        text = text.replace("大" ,"")
-        text = text.replace("✷" ,"")
-        text = text.replace("ή" ,"")
-        text = text.replace("ʔ" ,"")
-        text = text.replace("¨" ,"")
-        text = text.replace(" ఔ ", "")
-        text = text.replace("  ొ ", "")
-        text = text.replace(" డ ", "")
-        text = text.replace(" ట ", "")
-        text = text.replace(" ః ", "")
-        text = text.replace(" భ ", "")
-        text = text.replace(" ణ ", "")
-        text = text.replace(" ఖ ", "")
-        text = text.replace(" ధ ", "")
-        text = text.replace(" ఱ ", "")
-        text = text.replace("  ౌ ", "")
-        text = text.replace(" ళ ", "")
-        text = text.replace(" ృ ", "")
-        text = text.replace(" ఠ ", "")
-        text = text.replace(" ఋ ", "")
-        text = text.replace(" ఌ ", "")
+        text = text.replace("ו", "")
+        text = text.replace("ם", "")
+        text = text.replace("º", "")
+        text = text.replace("پ", "")
+        text = text.replace("😐", "")
+        text = text.replace("ਏ", "")
+        text = text.replace("ι", "")
+        text = text.replace("ç", "")
+        text = text.replace("ί", "")
+        text = text.replace("क", "")
+        text = text.replace("♠", "")
+        text = text.replace("瞿", "")
+        text = text.replace("桜", "")
+        text = text.replace("大", "")
+        text = text.replace("✷", "")
+        text = text.replace("ή", "")
+        text = text.replace("ʔ", "")
+        text = text.replace("¨", "")
         text = text.replace("υ", "",)
         text = text.replace("ド", "",)
         text = text.replace("₣", "",)
@@ -488,50 +412,23 @@ class LoadAndData:
         text = text.replace("イ", "",)
         text = text.replace("¢", "",)
 
-
         text = text.replace("\n", " ")
         text = text.replace("'", '')
-
-        text = text.replace("_", " __no_space__ __under_score__ __no_space__ ")
-        
-        text = text.replace(":", " __no_space__ __colon__ __no_space__ ")
-        text = text.replace(".", " __no_space__ __pointer__ __no_space__ ")
-        text = text.replace(",", " __no_space__ __coma__ __no_space__ ")
-        text = text.replace("[", " __no_space__ __sq_barc_open__ __no_space__ ")
-        text = text.replace(">", " __no_space__ __greater_than__ __no_space__ ")
-        text = text.replace("*", " __no_space__ __star__ __no_space__ ")
-        text = text.replace("=", " __no_space__ __equal__ __no_space__ ")
-        text = text.replace("%", " __no_space__ __percent__ __no_space__ ")
-        text = text.replace("]", " __no_space__ __sq_brac_close__ __no_space__ ")
-        text = text.replace("@", " __no_space__ __at__ __no_space__ ")
-        text = text.replace("#", " __no_space__ __hash__ __no_space__ ")
-        text = text.replace("{", " __no_space__ __flr_brac_open__ __no_space__ ")
-        text = text.replace("}", " __no_space__ __flr_brac_close__ __no_space__ ")
-        text = text.replace("$", " __no_space__ __doller__ __no_space__ ")
-        text = text.replace("~", " __no_space__ __tilda__ __no_space__ ")
-        text = text.replace("<", " __no_space__ __less_than__ __no_space__ ")
-        text = text.replace("^", " __no_space__ __cap__ __no_space__ ")
-        
-        text = text.replace("!", " __no_space__ __exclamation__ __no_space__ ")
-        text = text.replace("&", " __no_space__ __and__ __no_space__ ")
-        text = text.replace("(", " __no_space__ __small_brac_open__ __no_space__ ")
-        text = text.replace(")", " __no_space__ __small_brac_close__ __no_space__ ")
-        text = text.replace("?", " __no_space__ __question_mark__ __no_space__ ")
-        text = text.replace("+", " __no_space__ __plus__ __no_space__ ")
-        text = text.replace("/", " __no_space__ __forward_slash__ __no_space__ ")
         text = text.replace("`", " ")
-        text = text.replace("\\", " __no_space__ __back_slask__ __no_space__ ")
-        text = text.replace("-", "  __no_space__ __minus__ __no_space__ ")
-        text = text.replace("|", "  __no_space__ __pipe__ __no_space__ ")
-        
+
+        text = clean_special_chars(text)
         text = re.sub(r"\s+", " ", text)
         return text
-
 
     def run(self):
         self.source_clean = [self.clean_sent(i) for i in self.source]
         self.destination_clean = [self.clean_sent(i) for i in self.destination]
+
+        with open(self.source_path.replace("sample", "clean_sample"), "w") as f:
+            f.write("\n".join(self.source_clean))
         
+        with open(self.destination_path.replace("sample", "clean_sample"), "w") as f:
+            f.write("\n".join(self.destination_clean))
         return self.source_clean, self.destination_clean
 
     def max_sent_len(self, ):
@@ -544,8 +441,7 @@ class LoadAndData:
         return max_sent_len
 
     def train_data(self):
-        
-        
+
         self.data = list(zip(self.source_clean, self.destination_clean))
         random.shuffle(self.data)
 
@@ -569,38 +465,48 @@ class LoadAndData:
 
         train_source = self.source_clean[validation_range:]
         train_destination = self.destination_clean[validation_range:]
-        
+
         return train_source, train_destination
 
     def build_vocab(self, ):
-        
-                
         self.source_vocab = Counter()
         self.destination_vocab = Counter()
-        
+
         train_source, train_destination = self.train_data()
         for s in train_source:
-            self.source_vocab.update(s.split(" "))
+            self.source_vocab.update(s.strip().split(" "))
             
         for d in train_destination:
-            self.destination_vocab.update(d.split(" "))
+            self.destination_vocab.update(d.strip().split(" "))
 
-
-        # %%
-        self.source_vocab_list = list(self.source_vocab)
-        self.destination_vocab_list = list(self.destination_vocab)
 
         
-        self.source_vocab_list.append(' ')
-        self.destination_vocab_list.append(' ')
-        self.source_vocab_list.append('_')
-        self.destination_vocab_list.append('_')
-        self.source_vocab_list.append('<SOS>')
-        self.destination_vocab_list.append('<SOS>')
-        self.source_vocab_list.append('<EOS>')
-        self.destination_vocab_list.append('<EOS>')
-        self.source_vocab_list.append('<unk>')
-        self.destination_vocab_list.append('<unk>')
+        self.source_vocab_list = [SOS_TOKEN, EOS_TOKEN, UKN_TOKEN, PAD_TOKEN]
+        self.destination_vocab_list = [SOS_TOKEN, EOS_TOKEN, UKN_TOKEN, PAD_TOKEN]
+        
+        # self.source_vocab_list[SOS_TOKEN_INDEX] = [SOS_TOKEN]
+        # self.destination_vocab_list[SOS_TOKEN_INDEX] = [SOS_TOKEN]
+        
+        # self.source_vocab_list[EOS_TOKEN_INDEX] = [EOS_TOKEN]
+        # self.destination_vocab_list[EOS_TOKEN_INDEX] = [EOS_TOKEN]
+        
+        # self.source_vocab_list[UKN_TOKEN_INDEX] = [UKN_TOKEN]
+        # self.destination_vocab_list[UKN_TOKEN_INDEX] = [UKN_TOKEN]
+        
+        self.source_vocab_list += list(self.source_vocab)
+        self.destination_vocab_list += list(self.destination_vocab)
+
+        
+        # self.source_vocab_list.append(' ')
+        # self.destination_vocab_list.append(' ')
+        # self.source_vocab_list.append('_')
+        # self.destination_vocab_list.append('_')
+        # self.source_vocab_list.append('<SOS>')
+        # self.destination_vocab_list.append('<SOS>')
+        # self.source_vocab_list.append('<EOS>')
+        # self.destination_vocab_list.append('<EOS>')
+        # self.source_vocab_list.append('<unk>')
+        # self.destination_vocab_list.append('<unk>')
 
         logger.info(f"source_vocab len {len(list(self.source_vocab))}, destination vocab len {len(list(self.destination_vocab))}")
     
@@ -624,7 +530,7 @@ class TextData(Dataset):
                  data = [],
                  source_vocab=[],
                  destination_vocab=[],
-                 unknown_char="<unk>",
+                 unknown_char=UKN_TOKEN,
                  transform=None,
                  max_len=0):
         """
@@ -662,33 +568,37 @@ class TextData(Dataset):
     def __add_mandatory_tokens__(self, vector, type_):
       
       if type_ == "source":
-        return vector + self.__end_token__()
+        v = vector + [EOS_TOKEN_INDEX]
+        return v
       else:
-        return self.__start_token__() + vector + self.__end_token__()
+        v = [SOS_TOKEN_INDEX] + vector + [EOS_TOKEN_INDEX]
+        return v
 
     def __create_vector__(self, tokens, vocab):
-      vect = torch.zeros(self.max_len)
+      vect = torch.ones(self.max_len) * PAD_TOKEN_INDEX
       
       ## Adding starting position with <SOS>
-      vect[0] = vocab.index("<SOS>")
+      vect[0] = SOS_TOKEN_INDEX
       
+      if '' in tokens:
+        logger.exception(f"tokens : {tokens}")
+        exit()
       for pos, token in enumerate(tokens):
         try:
+          if (pos + 1) > len(tokens):
+            raise IndexError
           vect[pos + 1] = vocab.index(token)
         except IndexError as e:
-          vect[pos] = vocab.index("<EOS>")
+          vect[pos] = EOS_TOKEN_INDEX
         except ValueError as e:
           try:
-            vect[pos + 1] = vocab.index("<unk>")
+            vect[pos + 1] = UKN_TOKEN_INDEX
           except IndexError as e:
-            vect[pos] = vocab.index("<EOS>")
-            
+            vect[pos] = EOS_TOKEN_INDEX
+      
+      vect[-1] = EOS_TOKEN_INDEX
       return vect
       
-    
-    def __start_token__(self):
-      return [self.source_vocab.index('<SOS>')]
-
     
     def __end_token__(self):
       return [self.source_vocab.index('<EOS>')]
@@ -702,51 +612,21 @@ class TextData(Dataset):
         
         x_original = x
         y_original = y
-        x, y = x.split(' ')[:self.max_len], y.split(' ')[:self.max_len]
-
-
+        x, y = x.strip().split(' ')[:self.max_len], y.strip().split(' ')[:self.max_len]
+        
         if self.source_vocab and self.destination_vocab:
-            # x_vect = torch.zeros(self.max_len)
-            # y_vect = torch.zeros(self.max_len)
-            
-            # ## Adding starting position with <SOS>
-            # x_vect[0] = self.source_vocab.index("<SOS>")
-            # y_vect[0] = self.source_vocab.index("<SOS>")
-            
-            # for pos, s_token in enumerate(x):
-            #   try:
-            #     x_vect[pos + 1] = self.source_vocab.index(s_token)
-            #   except IndexError as e:
-            #     x_vect[pos] = self.source_vocab.index("<EOS>")
-            #   except ValueError as e:
-            #     try:
-            #       x_vect[pos + 1] = self.source_vocab.index("<unk>")
-            #     except IndexError as e:
-            #       x_vect[pos] = self.source_vocab.index("<EOS>")
-                
-              
-            # for pos, y_token in enumerate(y):
-            #   try:
-            #     y_vect[pos + 1] = self.destination_vocab.index(y_token)
-            #   except IndexError as e:
-            #     y_vect[pos] = self.destination_vocab.index("<EOS>")
-            #   except ValueError as e:
-            #     try:
-            #       y_vect[pos + 1] = self.destination_vocab.index("<unk>")
-            #     except IndexError as e:
-            #       y_vect[pos] = self.destination_vocab.index("<EOS>")
-                
-              
+
             
             x = self.__create_vector__(x, self.source_vocab)
             y = self.__create_vector__(y, self.destination_vocab)
-            # x = self.__add_mandatory_tokens__(x_vect, 'source')
-            # y = self.__add_mandatory_tokens__(y_vect, 'destination')
+
             
-            # x,y = torch.tensor(x), torch.tensor(y)
-            # x = self.__add_mandatory_tokens__([self.source_vocab.index(s_token) for s_token in x], 'source')
-            # y = self.__add_mandatory_tokens__([self.destination_vocab.index(d_token)  for d_token in y], 'destination')
+            # with open(DATA_PATH+"/vectors/data.en", "a") as f:
+            #     f.write(" ".join([str(_) for _ in list(x.numpy())]) + "\n")
         
+            # with open(DATA_PATH+"/vectors/data.te", "a") as f:
+            #     f.write(" ".join([str(_) for _ in list(y.numpy())]) + "\n")
+                    
         sample = x, y, x_original, y_original
         if self.transform:
             sample = self.transform(sample)
@@ -766,8 +646,8 @@ def collate_fun(batch):
       dest_list = torch.stack(dest_list)
     except ValueError as e:
       logger.exception(f"Origianl sentance :{x_original}, {y_original} Exception while converting into tensor : {e} source_list : {source_list} dest_list : {dest_list}")
-    return (pad_sequence(source_list, padding_value=0.0,batch_first=True).to(torch.long),
-            pad_sequence(dest_list, padding_value=0.0, batch_first=True).to(torch.long))
+    return (pad_sequence(source_list, padding_value=float(PAD_TOKEN_INDEX),batch_first=True).to(torch.long),
+            pad_sequence(dest_list, padding_value=float(PAD_TOKEN_INDEX), batch_first=True).to(torch.long))
     
     
 def get_data_generators():

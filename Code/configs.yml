@@ -1,0 +1,8 @@
+data:
+  destination_vocab_size: 184
+  destination_vocab_target_size: 184
+  source_vocab_size: 178
+  vocab_path: model_files/translator_ec_dc_Adam2_telugu_clean/vocab.json
+model:
+  decoder_path: ./model_files/decoder.pt
+  encoder_path: ./model_files/encoder.pt

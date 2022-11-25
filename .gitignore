@@ -4,3 +4,8 @@
 /cc.te.300.bin.gz.part
 /logs
 /test.py
+**/__pycache__
+Code/logs
+Code/log_files
+Code/**/__pycache__
+__pycache__/
