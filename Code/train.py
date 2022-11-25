@@ -506,6 +506,6 @@ if __name__ == "__main__":
     # })
     # configs.dump()
     
-    trainer = make_training_ready("base_model")
-    trainer.train(1)
+    trainer = make_training_ready("base_model_v1")
+    trainer.train(EPOCHS)
     

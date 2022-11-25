@@ -116,7 +116,7 @@ if __name__ == "__main__":
     encoder = LSTMEncoder(source_vocab_size, HIDDEN_SIZE)
     decoder = LSTMDecoder(destination_vocab_size, HIDDEN_SIZE, destination_vocab_target_size)
     
-    base_name = "translator_ec_dc_Adam2_telugu_clean/19/"
+    base_name = "base_model_v1/19/"
     encoder.load_state_dict(torch.load(f"./model_files/{base_name}encoder.pt"))
     decoder.load_state_dict(torch.load(f"./model_files/{base_name}decoder.pt"))
     
