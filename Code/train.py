@@ -62,18 +62,21 @@ class Train:
         if enable:
 
             # Processing model name as model directory to store tensorboard logs
-            model_dir = str(self).replace(" ", "_")
-            tensorboard_dir = f"{self.log_dir}/{model_dir}"
-            logger.log(self.log_level, f"tensorboard dir : {tensorboard_dir}")
+            
+            logger.info(f"tensorboard dir : {self.model_path}")
 
             # Creating tensorboard writer object
-            self._tens_board = self._tens_board_train = SummaryWriter(tensorboard_dir, comment='train')
-            self._tens_board_validation = SummaryWriter(tensorboard_dir, comment='validation')
-            self._tens_board_test = SummaryWriter(tensorboard_dir, comment='test')
+            self._tens_board = self._tens_board_train = SummaryWriter(self.model_path, comment='train')
+            self._tens_board_validation = SummaryWriter(self.model_path, comment='validation')
+            self._tens_board_test = SummaryWriter(self.model_path, comment='test')
 
             # Adding model graph to the tensorboard writer
-            sample_img = iter(training_generator).next()[0]
-            self._tens_board_train.add_graph(self.model, sample_img)
+            inp = torch.ones(64, dtype=torch.long)
+            hidden = torch.ones(2,256)
+            
+            
+            # self._tens_board_train.add_graph(self.encoding_model, inp)
+            self._tens_board_train.add_graph(self.decoding_model, (inp,hidden,hidden))
             logger.debug("Added graph...")
 
     @tens_board.getter
@@ -112,23 +115,24 @@ class Trainer(Train):
         self.loss_fun = loss_function
         self.opt = optimizer
         self.log_dir = log_dir
-        #self.tens_board = tensorboard
         
         self.optimizers = optimizer
         
 
+        self.encoding_model = encoder
+        self.decoding_model = decoder
         self.train_loss = 0
         self.validation_loss = 0
         self.test_loss = 0
         
         self.epoch = 0
-        
-        self.encoding_model = encoder
-        self.decoding_model = decoder
 
-        self.tens_board_train = SummaryWriter(log_dir + "/" + model_name, comment='train')
-        self.tens_board_validation = SummaryWriter(log_dir + "/" + model_name, comment='validation')
-        self.tens_board_test = SummaryWriter(log_dir + "/" + model_name, comment='test')
+        self.model_path = log_dir + "/" + model_name        
+        self.tens_board = tensorboard
+
+        self.tens_board_train = SummaryWriter(self.model_path, comment='train')
+        self.tens_board_validation = SummaryWriter(self.model_path, comment='validation')
+        self.tens_board_test = SummaryWriter(self.model_path, comment='test')
         self.metric = BLEUScore()
 
 
@@ -375,7 +379,7 @@ class Trainer(Train):
         create_dir(f"debugging/{self.name}")
         for epoch in self.epoch_loop:
             model_path = f"./model_files/{self.name}/{epoch}/"
-            os.mkdir(model_path)
+            os.makedirs(model_path, exist_ok=True)
             self.train_loss = 0
             self.validation_loss = 0
             self.test_loss = 0

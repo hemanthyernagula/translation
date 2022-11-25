@@ -10,3 +10,6 @@ Code/logs
 Code/log_files
 Code/**/__pycache__
 __pycache__/
+logs/
+Code/model_files
+debugging
