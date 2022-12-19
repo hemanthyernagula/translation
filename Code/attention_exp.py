@@ -3,10 +3,7 @@
 
 """
 
-
 import json
-import sys
-from typing import AnyStr, Dict
 import os
 import numpy as np
 import torch
@@ -17,25 +14,15 @@ from torchmetrics.text.bleu import BLEUScore
 from tqdm import tqdm
 
 from constants import (PAD_TOKEN_INDEX, SOS_TOKEN_INDEX,
-                        TENSORBOARD_LOG_DIR, HIDDEN_SIZE, EPOCHS, BATCH_SIZE)
+                        TENSORBOARD_LOG_DIR, HIDDEN_SIZE, BATCH_SIZE)
 from data_loader import LoadAndData, TextData, get_data_generators
-from models.model import (BiDecoder, BiEncoder, Decoder, Encoder, LSTMDecoder,
-                            LSTMEncoder, LSTMAttentionDecoder, Attention)
+from models.model import (LSTMDecoder, LSTMEncoder, Attention, LSTMAttentionDecoder)
 from mylogging import logger
-from utils.load_configs import Configs
-
-# logger.add(sys.stdout, format="{time} - {level} - {message}", filter="sub.module")
-# logger.add("file_{time}.log", level="ERROR", rotation="100 MB")
+from heatmap import plot_att_wts
 
 
-Decoder = BiDecoder
-Encoder = BiEncoder
-
-Decoder = LSTMDecoder
-Decoder = LSTMAttentionDecoder
 Encoder = LSTMEncoder
-
-
+Decoder = LSTMAttentionDecoder
 
 class Train:
 
@@ -132,7 +119,7 @@ class Trainer(Train):
         self.epoch = 0
 
         self.model_path = log_dir + "/" + model_name        
-        self.tens_board = tensorboard
+        # self.tens_board = tensorboard
 
         self.tens_board_train = SummaryWriter(self.model_path, comment='train')
         self.tens_board_validation = SummaryWriter(self.model_path, comment='validation')
@@ -228,40 +215,45 @@ class Trainer(Train):
 
     def __attention_lstm_iter_each_batch__(self, data_point, iter_for='train'):
         
-        x = data_point[0]
-        y = data_point[1]
+        x = data_point[0] # [BATCH_SIZE, MAX_LEN_OF_SENT]
+        y = data_point[1] # [BATCH_SIZE, MAX_LEN_OF_SENT]
         encoding_h_n = self.encoding_model.init_hidden_state()
         encoding_c_n = self.encoding_model.init_hidden_state()
 
         batch_decoder_outputs = torch.ones_like(y) * PAD_TOKEN_INDEX
         batch_decoder_outputs[:, 0] = SOS_TOKEN_INDEX
         enc_out = torch.ones(LoadAndData.MAX_SENT_LEN, BATCH_SIZE) * PAD_TOKEN_INDEX
-        for e_w in range(0, x.shape[1]):
-            # Iterating each word and tringing the encoder
-            en_inp = x[:, e_w]
-            encoding_out, encoding_h_n, encoding_c_n = self.encoding_model(en_inp, encoding_h_n, encoding_c_n)
-            enc_out[e_w] = encoding_out[0,0]
-            #logger.critical(f"for encoder input {en_inp} -->  output {enc_out}")
-
-        logger.info(f"encoding_h_n shape : {encoding_h_n.shape}")
+    
+        encoding_out, encoding_h_n, encoding_c_n = self.encoding_model(x, encoding_h_n, encoding_c_n)
+        
+        # encoding_out --> # [BATCH_SIZE, MAX_LEN_OF_SENT, HIDDEN_SIZE]
+        # encoding_h_n --> # [1* NO_OF_LSTM_LAYERS, BATCH_SIZE, HIDDEN_SIZE]
+        # encoding_c_n --> # [1* NO_OF_LSTM_LAYERS, BATCH_SIZE, HIDDEN_SIZE]
+        
         d_h_n = encoding_h_n
         d_c_n = encoding_c_n
-        d_inp = y[:, 0]
+        d_inp = y[:, 0] # [BATCH_SIZE, 1]
         batch_loss = 0
+        outputs = []
+        attentions = []
         for d_w in range(1, y.shape[1]):
-            d_out, d_h_n, d_c_n = self.decoding_model(d_inp, d_h_n, d_c_n, encoding_out)
+            d_out, d_h_n, d_c_n, att_weights = self.decoding_model(d_inp, d_h_n, d_c_n, encoding_out)
+            
+            # logger.info(f"original : {y[:, d_w]} | {y[:, d_w].shape}")
+            # logger.info(f"pred : {d_out} | {d_out.shape}")
             batch_loss += self.loss_fun(d_out, y[:, d_w])
+            # logger.info(f"batch_loss : {batch_loss}")
             #logger.critical(f"for decoder input : {d_out}")
             d_inp = y[:, d_w]
             topv, topi = d_out.data.topk(1)
-            # d_inp = topi.squeeze().detach()
-            np.savetxt(f"debugging/{self.name}/pred_{d_w}_loss.txt", topi.squeeze())
-            np.savetxt(f"debugging/{self.name}/actual_{d_w}_loss.txt", y[:, d_w].detach().numpy())
-            batch_decoder_outputs[:, d_w] = topi.squeeze()
             
-            
-                
-            #logger.critical(f"the decoder output is : {topi}")
+            # logger.info(f"topv : {topv} | topi : {topi}")
+            # batch_decoder_outputs[:, d_w] = topi.squeeze()
+            outputs.append(topi[0].item())
+            attentions.append(att_weights[0].squeeze().cpu().detach().numpy())
+        
+        
+        fig = plot_att_wts(x, outputs, attentions, source_vocab=TextData.source_vocab, destination_vocab=TextData.destination_vocab, epoch=self.epoch)
         if iter_for == 'train':
             # Backpropagation
             batch_loss.backward()
@@ -269,7 +261,10 @@ class Trainer(Train):
 
         score = self.calculate_score(y, batch_decoder_outputs)
         
+        self.tens_board_train.add_figure("attention weights", fig, global_step=self.epoch)
+        
         self.add_text_to_tensorboard(x, batch_decoder_outputs)
+        
         self._batch_loss = batch_loss
         return round(batch_loss.item() / y.shape[1], 30), score
 
@@ -441,20 +436,19 @@ class Trainer(Train):
 
             torch.save(self.encoding_model.state_dict(), encoder_path)
             torch.save(self.decoding_model.state_dict(), decoder_path)
-            
-# %%
+    
+
 def create_dir(path):
         try:
             os.makedirs(path)
         except FileExistsError:
             logger.debug("the directory already exists")
         
-    
 def make_training_ready(model_name):
     
     training_generator, test_data_generator, validate_data_generator = get_data_generators()
     source_vocab_size = len(TextData.source_vocab)
-    encoding_model = Encoder(source_vocab_size, HIDDEN_SIZE)
+    encoding_model = Encoder(source_vocab_size, HIDDEN_SIZE, LoadAndData.MAX_SENT_LEN)
     destination_vocab_size = len(TextData.destination_vocab)
     destination_vocab_target_size = len(TextData.destination_vocab)
     decoding_model = Decoder(destination_vocab_size, HIDDEN_SIZE, destination_vocab_target_size, Attention)
@@ -496,19 +490,9 @@ def make_training_ready(model_name):
     
     return trainer_obj
 
+
 if __name__ == "__main__":
-    
-    # configs = Configs(path="configs.yml")
-    # configs.configs.update({
-    #     "data":{
-    #         "source_vocab_size": source_vocab_size,
-    #         "destination_vocab_size": destination_vocab_size,
-    #         "destination_vocab_target_size": destination_vocab_target_size,
-    #         "vocab_path": vocab_path
-    #     }
-    # })
-    # configs.dump()
-    
-    trainer = make_training_ready("base_model_v1.5.1")
-    trainer.train(EPOCHS)
+    trainer = make_training_ready("base_model_v1.6")
+    trainer.train(30)
+    # logger.info(trainer.train_data)
     
