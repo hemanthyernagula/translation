@@ -14,3 +14,5 @@ logs/
 Code/model_files
 debugging
 log_files/
+Code/.vscode/
+model_files/
