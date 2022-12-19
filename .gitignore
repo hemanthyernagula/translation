@@ -13,3 +13,4 @@ __pycache__/
 logs/
 Code/model_files
 debugging
+log_files/
